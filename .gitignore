@@ -1,0 +1,17 @@
+# SQLite database files
+*.db
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.mypy_cache/
+
+# Environment directories
+venv/
+env/
+.env/
+
+# IDE specific files
+.vscode/
+.idea/
