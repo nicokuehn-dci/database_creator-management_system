@@ -1,0 +1,10 @@
+# Required packages for database creator
+openpyxl>=3.0.0
+pymysql>=1.0.0
+psycopg2-binary>=2.9.0
+pyodbc>=4.0.0
+requests>=2.0.0
+pandas>=1.0.0
+matplotlib>=3.0.0
+numpy>=1.18.0
+seaborn>=0.10.0

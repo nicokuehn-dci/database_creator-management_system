@@ -1,23 +1,51 @@
-import sqlite3
+#!/usr/bin/env python3
+"""
+Backward compatibility script for the original monolithic database_creator.
+New development should use the modular package structure instead.
+
+This script imports and uses functionality from the modular package,
+but maintains the original API for backward compatibility.
+"""
+
 import os
+import sys
+import sqlite3
+import argparse
+import datetime
 import json
 import re
 import hashlib
 import secrets
-import datetime
-import argparse
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Tuple
 
-# Constants
-DEFAULT_DB_NAME = "database.db"
-CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".database_creator")
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-TEMPLATES_DIR = os.path.join(CONFIG_DIR, "templates")
-
-# Create configuration directory if it doesn't exist
-os.makedirs(CONFIG_DIR, exist_ok=True)
-os.makedirs(TEMPLATES_DIR, exist_ok=True)
+# First try to import from the modular package
+try:
+    from database_creator import (
+        __version__,
+        DatabaseManager,
+        DatabaseConnection,
+        load_config,
+        save_config,
+        hash_password,
+        verify_password,
+        DatabaseTemplates,
+        get_advanced_ecommerce_template
+    )
+    USING_MODULAR = True
+except ImportError:
+    # If that fails, we'll use the original code
+    USING_MODULAR = False
+    
+    # Constants
+    DEFAULT_DB_NAME = "database.db"
+    CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".database_creator")
+    CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+    TEMPLATES_DIR = os.path.join(CONFIG_DIR, "templates")
+    
+    # Create configuration directory if it doesn't exist
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    os.makedirs(TEMPLATES_DIR, exist_ok=True)
 
 # Default configuration
 DEFAULT_CONFIG = {
@@ -937,10 +965,23 @@ def setup_database(db_manager):
     templates = DatabaseTemplates()
     template_list = templates.list_templates()
     
-    if not template_list:
-        print("❌ No templates available. Creating default structure...")
+    # Ensure templates are initialized
+    if not template_list or len(template_list) < 5:  # Check if we have all expected templates
+        print("Initializing default templates...")
         initialize_default_templates()
         template_list = templates.list_templates()
+    
+    # Find the Advanced E-Commerce template and move it to the first position
+    advanced_ecommerce_index = None
+    for i, template in enumerate(template_list):
+        if template['name'] == "Advanced E-Commerce":
+            advanced_ecommerce_index = i
+            break
+    
+    if advanced_ecommerce_index is not None:
+        # Move to first position for better visibility
+        advanced_template = template_list.pop(advanced_ecommerce_index)
+        template_list.insert(0, advanced_template)
     
     print("\n=== Available Database Templates ===")
     for i, template in enumerate(template_list):
@@ -1030,6 +1071,8 @@ def add_customer(db_manager):
     
     if not db_manager.table_exists("customers"):
         print("❌ Customers table does not exist. Please set up the database first.")
+        print("Please select option 1 from the main menu and choose either")
+        print("'Web Store' or 'Advanced E-Commerce' template which includes customer tables.")
         return
     
     first_name = input("First name: ")
@@ -1063,17 +1106,39 @@ def add_customer(db_manager):
     # Hash password
     password_hash, _ = hash_password(password)
     
+    # Check if the customers table has password_hash column or password column
+    table_info = db_manager.get_table_info("customers")
+    columns = [col['name'] for col in table_info]
+    
+    # Determine the correct password column name
+    if "password_hash" in columns:
+        password_column = "password_hash"
+    else:
+        password_column = "password"
+    
+    # Build the query dynamically
+    columns = ["first_name", "last_name", "email", password_column]
+    values = [first_name, last_name, email, password_hash]
+    
+    # Add optional phone if the column exists
+    phone = None
+    if "phone" in columns:
+        phone = input("Phone number (optional): ")
+        if phone:
+            columns.append("phone")
+            values.append(phone)
+    
     # Insert into database
-    result = db_manager.execute_query(
-        """
-        INSERT INTO customers (first_name, last_name, email, password_hash) 
-        VALUES (?, ?, ?, ?)
-        """, 
-        (first_name, last_name, email, password_hash)
-    )
+    placeholders = ", ".join(["?"] * len(values))
+    column_names = ", ".join(columns)
+    
+    query = f"INSERT INTO customers ({column_names}) VALUES ({placeholders})"
+    
+    result = db_manager.execute_query(query, tuple(values))
     
     if result:
         print("✅ Customer added successfully.")
+        print(f"Customer ID: {result[0]['last_insert_rowid()'] if 'last_insert_rowid()' in result[0] else 'Unknown'}")
     else:
         print("❌ Failed to add customer.")
 
@@ -1083,9 +1148,22 @@ def add_product(db_manager):
     
     if not db_manager.table_exists("products"):
         print("❌ Products table does not exist. Please set up the database first.")
+        print("Please select option 1 from the main menu and choose either")
+        print("'Web Store' or 'Advanced E-Commerce' template which includes product tables.")
         return
     
+    # Get table structure to determine available columns
+    table_info = db_manager.get_table_info("products")
+    available_columns = [col['name'] for col in table_info]
+    
+    # Initialize columns and values lists
+    columns = []
+    values = []
+    
+    # Required fields
     name = input("Product name: ")
+    columns.append("name")
+    values.append(name)
     
     # Get and validate price
     price_str = input("Price: ")
@@ -1093,6 +1171,8 @@ def add_product(db_manager):
     if not is_valid:
         print("❌ Invalid price. Must be a positive number.")
         return
+    columns.append("price")
+    values.append(price)
     
     # Get and validate stock
     stock_str = input("Stock: ")
@@ -1101,19 +1181,44 @@ def add_product(db_manager):
         print("❌ Invalid stock. Must be a non-negative integer.")
         return
     stock = int(stock)
+    columns.append("stock")
+    values.append(stock)
     
     # Description is optional
     description = input("Description (optional): ")
-    
-    # Insert into database
-    columns = ["name", "price", "stock"]
-    values = [name, price, stock]
-    
-    # Add description if provided
     if description:
         columns.append("description")
         values.append(description)
     
+    # Check for SKU in advanced schema
+    if "sku" in available_columns:
+        sku = input("SKU (optional): ")
+        if sku:
+            columns.append("sku")
+            values.append(sku)
+    
+    # Check for category in advanced schema
+    if "category_id" in available_columns:
+        # List categories if they exist
+        if db_manager.table_exists("categories"):
+            categories = db_manager.execute_query(
+                "SELECT category_id, name FROM categories ORDER BY category_id"
+            )
+            
+            if categories:
+                print("\n--- Available Categories ---")
+                for cat in categories:
+                    print(f"[{cat['category_id']}] {cat['name']}")
+                print("---------------------------")
+                
+                cat_id_str = input("\nCategory ID (or press Enter to skip): ")
+                if cat_id_str:
+                    is_valid, cat_id = Validator.validate_number(cat_id_str, min_val=1)
+                    if is_valid:
+                        columns.append("category_id")
+                        values.append(cat_id)
+    
+    # Build and execute query
     query = f"""
     INSERT INTO products ({', '.join(columns)}) 
     VALUES ({', '.join(['?'] * len(values))})
@@ -1123,6 +1228,7 @@ def add_product(db_manager):
     
     if result:
         print("✅ Product added successfully.")
+        print(f"Product ID: {result[0]['last_insert_rowid()'] if 'last_insert_rowid()' in result[0] else 'Unknown'}")
     else:
         print("❌ Failed to add product.")
 
@@ -1598,7 +1704,11 @@ def command_line_interface():
             menu(db_path)  # Fall back to CLI
     else:
         # Launch interactive menu
-        menu(db_path)
+        try:
+            menu(db_path)
+        except KeyboardInterrupt:
+            print("\n\nExiting Database Creator. Goodbye!")
+            return
 
 def launch_gui(db_path=None):
     """Launch the GUI interface if tkinter is available."""
