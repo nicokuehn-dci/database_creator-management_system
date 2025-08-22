@@ -46,7 +46,8 @@ database-creator/
 - **Statistical Analysis** - View detailed statistics and summaries of your data
 - **Template System** - Jump-start projects with predefined database schemas
 - **Advanced E-Commerce** - Complete schema for professional e-commerce applications
-- **Import/Export** - Transfer data via SQL, JSON, or CSV formats
+- **Import/Export** - Transfer data via SQL, JSON, CSV, TSV, or Excel formats with advanced import wizard
+- **Advanced Import System** - Intelligent 4-step wizard for importing text files with automatic data type detection
 - **Secure Authentication** - Built-in password hashing for user data
 - **Customizable** - Fully extensible design for adding new templates and features
 
@@ -104,11 +105,11 @@ To use the analytics features:
 4. Choose columns for X and Y axes and select a chart type
 5. Click "Generate Visualization" to create your chart
 
-### �💻 GUI Mode
+### 💻 GUI Mode
 
 The graphical interface provides an intuitive way to manage your databases:
 
-![GUI Demo](https://via.placeholder.com/800x450.png?text=Database+Creator+GUI+Interface)
+![GUI Demo](docs/gui_main.png)
 
 - **Connect** - Open existing databases or create new ones
 - **Create** - Design tables with custom fields and constraints
@@ -117,9 +118,18 @@ The graphical interface provides an intuitive way to manage your databases:
   - Add/remove rows and columns with intuitive controls
   - View real-time SQL preview of your table structure
 
+- **Advanced Import System** - Import data from various file formats:
+  - **4-Step Import Wizard** for CSV, TSV, and text files with intelligent data detection
+  - **Excel File Import** with sheet selection and automatic column mapping
+  - **Smart Delimiter Detection** automatically identifies file formats
+  - **Data Type Inference** automatically detects column types (INTEGER, REAL, TEXT, etc.)
+  - **Column Constraints** set Primary Keys, NOT NULL, and UNIQUE constraints during import
+  - **Progress Tracking** with batch importing for large files
+  - **Error Handling** with options to skip malformed rows
+
 - **Query** - Execute SQL commands with a built-in editor
 - **Templates** - Apply pre-built database structures in one click
-- **Import/Export** - Exchange data between different formats
+- **Export** - Save data in multiple formats (SQL, CSV, JSON)
 
 ### ⌨️ CLI Mode
 

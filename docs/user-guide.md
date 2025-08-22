@@ -128,6 +128,54 @@ The Databases tab provides a central place to manage your database files:
 
 The Excel-like interface provides a familiar spreadsheet experience that makes database creation and editing more intuitive, especially for users who are more comfortable with spreadsheet applications than SQL commands.
 
+### Importing Data
+
+The Database Creator provides comprehensive import functionality for various file formats:
+
+#### Text File Import Wizard
+
+1. Go to **File** → **Import** → **CSV/Text File**
+2. **Step 1: File Selection**
+   - Choose file type (CSV, TSV, or custom delimiter)
+   - Browse and select your file
+   - Set the table name (auto-generated from filename)
+3. **Step 2: Preview Data**
+   - Configure delimiter settings
+   - Choose encoding (UTF-8, Latin-1, etc.)
+   - Preview your data with proper formatting
+   - Toggle "First row contains headers" option
+4. **Step 3: Column Mapping**
+   - Review auto-detected column types (TEXT, INTEGER, REAL, etc.)
+   - Set database constraints (Primary Key, Not Null, Unique)
+   - Adjust data types as needed
+5. **Step 4: Import Options**
+   - Review import summary
+   - Set batch size for large files
+   - Choose error handling options
+   - Execute import with progress tracking
+
+#### Excel File Import
+
+1. Go to **File** → **Import** → **Excel File**
+2. Select your Excel file (.xlsx or .xls)
+3. Choose the worksheet to import (if multiple sheets exist)
+4. Data is automatically imported with the sheet name as table name
+
+#### Supported Import Formats
+
+- **CSV** (Comma-separated values)
+- **TSV** (Tab-separated values)  
+- **Custom delimited text files**
+- **Excel files** (.xlsx, .xls)
+- **Multiple encodings** (UTF-8, Latin-1, CP1252, UTF-16)
+
+The import wizard includes smart features:
+- **Automatic delimiter detection**
+- **Intelligent data type inference**
+- **Batch processing for large files**
+- **Error handling with skip options**
+- **Progress tracking and status updates**
+
 ### Running Queries
 
 1. Switch to the "SQL Query" tab
@@ -206,9 +254,13 @@ You can export your database in several formats:
   python main.py --db mydb.db --export mydb.sql
   ```
 
-- In GUI mode, use "File" → "Export SQL"
+- In GUI mode:
+  - For the entire database: "File" → "Export" → "SQL"
+  - For a specific table: "File" → "Export" → "CSV"
 
 ### Importing Data
+
+#### Importing SQL
 
 To import a previously exported database:
 
@@ -217,7 +269,45 @@ To import a previously exported database:
   python main.py --db new_db.db --import backup.sql
   ```
 
-- In GUI mode, use "File" → "Import SQL"
+- In GUI mode, use "File" → "Import" → "SQL"
+
+#### Importing CSV/Text Files
+
+The application includes a powerful text file import wizard:
+
+1. Connect to a database
+2. Go to "File" → "Import" → "CSV/Text File"
+3. Follow the wizard steps:
+   - **Step 1: Select File**
+     - Choose file type (CSV, TSV, plain text)
+     - Browse for your file
+     - Set table name and encoding
+   
+   - **Step 2: Preview Data**
+     - Choose delimiter character (comma, tab, custom)
+     - Specify if first row contains headers
+     - Preview how the data will be interpreted
+   
+   - **Step 3: Map Columns**
+     - Map file columns to database columns
+     - Set data types (TEXT, INTEGER, etc.)
+     - Add constraints (PRIMARY KEY, NOT NULL, UNIQUE)
+     - Choose which columns to include/exclude
+   
+   - **Step 4: Import**
+     - Choose how to handle existing tables (replace or append)
+     - Set batch size for large imports
+     - Execute the import process with progress tracking
+
+#### Importing Excel Files
+
+To import data from Excel spreadsheets:
+
+1. Connect to a database
+2. Go to "File" → "Import" → "Excel File"
+3. Select your Excel file
+4. Choose which sheet to import
+5. The data will be imported into a new table with the same name as the sheet
 
 ## Security Features
 

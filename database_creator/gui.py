@@ -138,8 +138,20 @@ class GUI:
             label="Open Database",
             command=self.open_database)
         file_menu.add_separator()
-        file_menu.add_command(label="Import SQL", command=self.import_sql)
-        file_menu.add_command(label="Export SQL", command=self.export_sql)
+        
+        # Import submenu
+        import_menu = tk.Menu(file_menu, tearoff=0)
+        import_menu.add_command(label="SQL", command=self.import_sql)
+        import_menu.add_command(label="CSV/Text File", command=self.import_text_file)
+        import_menu.add_command(label="Excel File", command=self.import_excel_file)
+        file_menu.add_cascade(label="Import", menu=import_menu)
+        
+        # Export submenu
+        export_menu = tk.Menu(file_menu, tearoff=0)
+        export_menu.add_command(label="SQL", command=self.export_sql)
+        export_menu.add_command(label="CSV", command=self.export_csv)
+        file_menu.add_cascade(label="Export", menu=export_menu)
+        
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -1352,17 +1364,23 @@ class GUI:
 
             # Add columns
             self.template_details.insert(tk.END, "Columns:\n")
-            for col_name, col_type in table_def.get('columns', {}).items():
-                self.template_details.insert(
-                    tk.END,
-                    f"  {col_name}: {col_type}\n")
+            # Check if table_def is a dictionary
+            if isinstance(table_def, dict):
+                for col_name, col_type in table_def.get('columns', {}).items():
+                    self.template_details.insert(
+                        tk.END,
+                        f"  {col_name}: {col_type}\n")
+            elif isinstance(table_def, str):
+                # If it's a string, just display it as the column type
+                self.template_details.insert(tk.END, f"  {table_def}\n")
 
             # Add constraints if any
-            constraints = table_def.get('constraints', [])
-            if constraints:
-                self.template_details.insert(tk.END, "\nConstraints:\n")
-                for constraint in constraints:
-                    self.template_details.insert(tk.END, f"  {constraint}\n")
+            if isinstance(table_def, dict):
+                constraints = table_def.get('constraints', [])
+                if constraints:
+                    self.template_details.insert(tk.END, "\nConstraints:\n")
+                    for constraint in constraints:
+                        self.template_details.insert(tk.END, f"  {constraint}\n")
 
             self.template_details.insert(tk.END, "\n")
 
@@ -1475,21 +1493,34 @@ class GUI:
 
         try:
             for table_name, table_def in template.items():
-                columns = table_def.get('columns', {})
-                constraints = table_def.get('constraints', [])
-
-                # Format columns for create_table
-                column_defs = \
-                              [f"{name} {dtype}" for name, dtype in columns.items(
-                                  
-                              )]
-
-                # Add any additional constraints
-                if constraints:
-                    column_defs.extend(constraints)
-
-                # Create the table
-                self.db_manager.create_table(table_name, column_defs)
+                # Skip metadata fields
+                if table_name in ("name", "description", "version"):
+                    continue
+                
+                # Handle different template formats
+                if isinstance(table_def, dict):
+                    columns = table_def.get('columns', {})
+                    constraints = table_def.get('constraints', [])
+                    
+                    # Format columns for create_table
+                    if isinstance(columns, dict):
+                        column_defs = [f"{name} {dtype}" for name, dtype in columns.items()]
+                    else:
+                        # If columns is not a dictionary, treat it as a list
+                        column_defs = columns if isinstance(columns, list) else []
+                    
+                    # Add any additional constraints
+                    if constraints:
+                        column_defs.extend(constraints)
+                else:
+                    # If table_def is not a dictionary (e.g., a string),
+                    # use it as a single column definition
+                    column_defs = [table_def] if isinstance(table_def, str) else []
+                
+                # Only create the table if we have valid column definitions
+                if column_defs:
+                    # Create the table
+                    self.db_manager.create_table(table_name, column_defs)
 
             # Refresh UI
             self.refresh_table_list()
@@ -1535,6 +1566,169 @@ class GUI:
                 self.status_var.set(f"Database exported to {file_path}")
             except Exception as e:
                 self.show_error(f"Error exporting database: {str(e)}")
+                
+    def import_text_file(self):
+        """Import data from a text file (CSV, TSV, etc.)."""
+        if not self.db_manager:
+            messagebox.showinfo("Info", "Please connect to a database first.")
+            return
+        
+        try:
+            # Import the text importer module
+            from .db_import_text import show_text_import_wizard
+            
+            # Show the import wizard
+            show_text_import_wizard(self.root, self.db_manager.db_path)
+            
+            # Refresh UI
+            self.refresh_table_list()
+            self.refresh_data_table_combo()
+            self.status_var.set("Table imported successfully")
+        except Exception as e:
+            self.show_error(f"Error importing text file: {str(e)}")
+            
+    def import_excel_file(self):
+        """Import data from an Excel file."""
+        if not self.db_manager:
+            messagebox.showinfo("Info", "Please connect to a database first.")
+            return
+        
+        file_path = filedialog.askopenfilename(
+            filetypes=[
+                ("Excel Files", "*.xlsx *.xls"),
+                ("All Files", "*.*")
+            ]
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # Get sheet name
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(file_path, read_only=True)
+                sheet_names = wb.sheetnames
+                
+                # If there's only one sheet, use that
+                if len(sheet_names) == 1:
+                    sheet_name = sheet_names[0]
+                else:
+                    # Let user choose sheet
+                    sheet_name = self._show_sheet_selector(sheet_names)
+                    if not sheet_name:  # User canceled
+                        return
+            except ImportError:
+                messagebox.showerror(
+                    "Error", 
+                    "The openpyxl package is required to import Excel files.\n"
+                    "Please install it with 'pip install openpyxl'"
+                )
+                return
+                
+            # Import data
+            from .db_import_export import DatabaseImportExport
+            
+            success, message = DatabaseImportExport.import_excel_to_database(
+                self.db_manager.db_path, file_path, sheet_name
+            )
+            
+            if success:
+                messagebox.showinfo("Success", message)
+                
+                # Refresh UI
+                self.refresh_table_list()
+                self.refresh_data_table_combo()
+                self.status_var.set("Excel data imported successfully")
+            else:
+                self.show_error(f"Import failed: {message}")
+                
+        except Exception as e:
+            self.show_error(f"Error importing Excel file: {str(e)}")
+            
+    def _show_sheet_selector(self, sheet_names):
+        """Show a dialog to select a sheet from an Excel workbook."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Select Sheet")
+        dialog.geometry("300x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(
+            dialog, 
+            text="Select the sheet to import:"
+        ).pack(pady=10)
+        
+        sheet_var = tk.StringVar()
+        sheet_listbox = tk.Listbox(dialog, height=10)
+        sheet_listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        for sheet in sheet_names:
+            sheet_listbox.insert(tk.END, sheet)
+            
+        # Select first sheet by default
+        if sheet_names:
+            sheet_listbox.selection_set(0)
+            
+        selected_sheet = [None]  # Use list to store return value
+        
+        def on_ok():
+            selection = sheet_listbox.curselection()
+            if selection:
+                selected_sheet[0] = sheet_names[selection[0]]
+            dialog.destroy()
+            
+        def on_cancel():
+            dialog.destroy()
+            
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill=tk.X, pady=10)
+        
+        ttk.Button(btn_frame, text="OK", command=on_ok).pack(side=tk.RIGHT, padx=10)
+        ttk.Button(btn_frame, text="Cancel", command=on_cancel).pack(side=tk.RIGHT)
+        
+        # Wait for dialog to close
+        self.root.wait_window(dialog)
+        
+        return selected_sheet[0]
+            
+    def export_csv(self):
+        """Export current table to CSV file."""
+        if not self.db_manager:
+            messagebox.showinfo("Info", "Please connect to a database first.")
+            return
+            
+        # Get current table
+        table_name = self.data_table_var.get()
+        if not table_name:
+            messagebox.showinfo("Info", "Please select a table to export.")
+            return
+            
+        # Get export path
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # Export data
+            from .db_import_export import DatabaseImportExport
+            
+            success, message = DatabaseImportExport.export_table_data(
+                self.db_manager.db_path, table_name, "csv", file_path
+            )
+            
+            if success:
+                messagebox.showinfo("Success", message)
+                self.status_var.set(f"Table exported to {file_path}")
+            else:
+                self.show_error(f"Export failed: {message}")
+                
+        except Exception as e:
+            self.show_error(f"Error exporting table: {str(e)}")
 
     def show_about(self):
         """Show about dialog."""
