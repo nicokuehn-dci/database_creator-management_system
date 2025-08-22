@@ -1,14 +1,36 @@
-# 🗃️ Database Creator
+# 🗃️ Database Creator & Management System
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![Python](https://img.shields.io/badge/python-3.6%2B-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 </div>
 
 A powerful, flexible SQLite database management tool featuring both intuitive GUI and efficient CLI interfaces. Perfect for developers, data analysts, and anyone needing to quickly create and manage structured data.
+
+## 📁 Project Structure
+
+```
+database-creator/
+├── database_creator/     # Core module containing all main functionality
+│   ├── __init__.py
+│   ├── database.py       # Core database handling
+│   ├── gui.py            # GUI implementation
+│   ├── cli.py            # CLI implementation
+│   ├── theme_manager.py  # GUI theme handling
+│   └── ... other modules
+├── dev_tests/            # Testing files
+├── docs/                 # Documentation
+├── databases/            # Default database storage location
+├── sample_databases/     # Example databases
+├── utils/                # Utility scripts
+│   ├── fixers/           # Linting and syntax fixing tools
+│   └── debug/            # Debugging tools
+├── main.py               # Main entry point
+└── requirements.txt      # Project dependencies
+```
 
 ## ✨ Features
 
@@ -37,7 +59,15 @@ A powerful, flexible SQLite database management tool featuring both intuitive GU
    cd database-creator
    ```
 
-2. **Run the application**:
+2. **Install dependencies**:
+
+   ```bash
+   # Dependencies are automatically installed when you run the application
+   # You can also install them manually:
+   pip install -r requirements.txt
+   ```
+
+3. **Run the application**:
 
    ```bash
    # GUI Mode
@@ -45,6 +75,12 @@ A powerful, flexible SQLite database management tool featuring both intuitive GU
    
    # CLI Mode
    python main.py --cli
+   
+   # Run system diagnostics
+   python main.py --diagnostic
+   
+   # Check health of a specific database
+   python main.py --check-db path/to/database.db
    ```
 
 ## 📖 Usage
@@ -128,8 +164,16 @@ database_creator/
 ├── gui.py             # Graphical user interface
 ├── security.py        # Password hashing and validation
 ├── templates.py       # Template management
-└── advanced_templates.py  # Advanced database templates
-main.py                # Application entry point
+├── advanced_templates.py  # Advanced database templates
+├── analytics.py       # Data analysis and visualization
+├── db_connections.py  # External database connections
+├── db_management.py   # Database management interface
+├── db_table_manager.py # Table operations
+├── db_import_export.py # Import/export functionality
+├── db_utils.py        # Utility functions
+├── excel_gui.py       # Excel-like interface
+└── diagnostics.py     # System diagnostics and troubleshooting
+main.py                # Application entry point with automatic dependency management
 ```
 
 ## � Screenshots
