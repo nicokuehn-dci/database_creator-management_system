@@ -131,13 +131,15 @@ class DatabaseImportExport:
                 f.write(f"INSERT INTO {table_name} ({cols}) VALUES ({value_str});\n")
 
     @staticmethod
-    def import_csv_to_database(db_path, file_path, table_name=None):
+    def import_csv_to_database(db_path, file_path, table_name=None, delimiter=None, encoding='utf-8'):
         """Import data from a CSV file to a database.
 
         Args:
             db_path: Path to the database
             file_path: Path to the CSV file
             table_name: Optional name for the table, defaults to CSV filename
+            delimiter: Optional delimiter (auto-detected if None)
+            encoding: File encoding (default: utf-8)
 
         Returns:
             Tuple of (success, message)
@@ -152,9 +154,16 @@ class DatabaseImportExport:
                     c if c.isalnum() else '_' for c in table_name
                 )
 
-            # Read CSV data
-            with open(file_path, 'r', newline='') as f:
-                reader = csv.reader(f)
+            # Read CSV data with optional delimiter
+            with open(file_path, 'r', newline='', encoding=encoding) as f:
+                # Auto-detect delimiter if not provided
+                if delimiter is None:
+                    sample = f.read(1024)
+                    f.seek(0)
+                    sniffer = csv.Sniffer()
+                    delimiter = sniffer.sniff(sample).delimiter
+                
+                reader = csv.reader(f, delimiter=delimiter)
                 headers = next(reader)  # First row as headers
                 data = list(reader)
 

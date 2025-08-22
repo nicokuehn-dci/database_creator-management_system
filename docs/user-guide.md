@@ -128,6 +128,54 @@ The Databases tab provides a central place to manage your database files:
 
 The Excel-like interface provides a familiar spreadsheet experience that makes database creation and editing more intuitive, especially for users who are more comfortable with spreadsheet applications than SQL commands.
 
+### Importing Data
+
+The Database Creator provides comprehensive import functionality for various file formats:
+
+#### Text File Import Wizard
+
+1. Go to **File** → **Import** → **CSV/Text File**
+2. **Step 1: File Selection**
+   - Choose file type (CSV, TSV, or custom delimiter)
+   - Browse and select your file
+   - Set the table name (auto-generated from filename)
+3. **Step 2: Preview Data**
+   - Configure delimiter settings
+   - Choose encoding (UTF-8, Latin-1, etc.)
+   - Preview your data with proper formatting
+   - Toggle "First row contains headers" option
+4. **Step 3: Column Mapping**
+   - Review auto-detected column types (TEXT, INTEGER, REAL, etc.)
+   - Set database constraints (Primary Key, Not Null, Unique)
+   - Adjust data types as needed
+5. **Step 4: Import Options**
+   - Review import summary
+   - Set batch size for large files
+   - Choose error handling options
+   - Execute import with progress tracking
+
+#### Excel File Import
+
+1. Go to **File** → **Import** → **Excel File**
+2. Select your Excel file (.xlsx or .xls)
+3. Choose the worksheet to import (if multiple sheets exist)
+4. Data is automatically imported with the sheet name as table name
+
+#### Supported Import Formats
+
+- **CSV** (Comma-separated values)
+- **TSV** (Tab-separated values)  
+- **Custom delimited text files**
+- **Excel files** (.xlsx, .xls)
+- **Multiple encodings** (UTF-8, Latin-1, CP1252, UTF-16)
+
+The import wizard includes smart features:
+- **Automatic delimiter detection**
+- **Intelligent data type inference**
+- **Batch processing for large files**
+- **Error handling with skip options**
+- **Progress tracking and status updates**
+
 ### Running Queries
 
 1. Switch to the "SQL Query" tab
