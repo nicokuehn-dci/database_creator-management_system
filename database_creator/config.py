@@ -56,7 +56,7 @@ def save_config(config):
     """Save configuration to file."""
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4)
-        
+
 def ensure_directory_exists(directory_path):
     """Ensure that the specified directory exists."""
     os.makedirs(directory_path, exist_ok=True)

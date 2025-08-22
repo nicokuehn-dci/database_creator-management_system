@@ -1,0 +1,85 @@
+{
+    "name": "Simple Blog",
+    "description": "A basic blog template with posts, users, and comments",
+    "version": "1.0",
+    "tables": [
+        {
+            "name": "users",
+            "columns": [
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "username TEXT NOT NULL",
+                "email TEXT NOT NULL",
+                "password_hash TEXT NOT NULL",
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP",
+                "is_admin INTEGER DEFAULT 0"
+            ],
+            "indexes": [
+                "CREATE UNIQUE INDEX idx_users_username ON users(username)",
+                "CREATE UNIQUE INDEX idx_users_email ON users(email)"
+            ]
+        },
+        {
+            "name": "posts",
+            "columns": [
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "title TEXT NOT NULL",
+                "content TEXT NOT NULL",
+                "user_id INTEGER NOT NULL",
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP",
+                "updated_at TEXT DEFAULT CURRENT_TIMESTAMP",
+                "published INTEGER DEFAULT 0",
+                "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+            ],
+            "indexes": [
+                "CREATE INDEX idx_posts_user ON posts(user_id)"
+            ]
+        },
+        {
+            "name": "comments",
+            "columns": [
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "post_id INTEGER NOT NULL",
+                "user_id INTEGER NOT NULL",
+                "content TEXT NOT NULL",
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP",
+                "FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE",
+                "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"
+            ],
+            "indexes": [
+                "CREATE INDEX idx_comments_post ON comments(post_id)",
+                "CREATE INDEX idx_comments_user ON comments(user_id)"
+            ]
+        },
+        {
+            "name": "categories",
+            "columns": [
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "name TEXT NOT NULL",
+                "description TEXT"
+            ],
+            "indexes": [
+                "CREATE UNIQUE INDEX idx_categories_name ON categories(name)"
+            ]
+        },
+        {
+            "name": "post_categories",
+            "columns": [
+                "post_id INTEGER NOT NULL",
+                "category_id INTEGER NOT NULL",
+                "PRIMARY KEY (post_id, category_id)",
+                "FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE",
+                "FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE"
+            ]
+        }
+    ],
+    "sample_data": {
+        "users": [
+            {"username": "admin", "email": "admin@example.com", "password_hash": "hashed_password", "is_admin": 1},
+            {"username": "user1", "email": "user1@example.com", "password_hash": "hashed_password"}
+        ],
+        "categories": [
+            {"name": "Technology", "description": "Tech related posts"},
+            {"name": "Personal", "description": "Personal thoughts"}
+        ]
+    }
+}

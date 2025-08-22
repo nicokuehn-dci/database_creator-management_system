@@ -10,17 +10,16 @@ from typing import Dict, List, Optional, Any
 
 from .config import TEMPLATES_DIR
 
-
 class DatabaseTemplates:
     """Manages database templates for quick setup."""
-    
+
     def __init__(self, templates_dir=TEMPLATES_DIR):
         self.templates_dir = templates_dir
         os.makedirs(templates_dir, exist_ok=True)
-        
+
         # Load built-in templates
         self.templates = get_default_templates()
-    
+
     def list_templates(self) -> List[Dict]:
         """List all available templates."""
         templates = []
@@ -34,7 +33,7 @@ class DatabaseTemplates:
                 except json.JSONDecodeError:
                     pass  # Skip invalid templates
         return templates
-    
+
     def save_template(self, name: str, description: str, tables: Dict) -> str:
         """Save a database template."""
         template = {
@@ -43,79 +42,150 @@ class DatabaseTemplates:
             "created": datetime.datetime.now().isoformat(),
             "tables": tables
         }
-        
+
         # Create a valid filename from template name
         filename = re.sub(r'[^\w\s-]', '', name.lower())
         filename = re.sub(r'[-\s]+', '_', filename)
         template_path = os.path.join(self.templates_dir, f"{filename}.json")
-        
+
         with open(template_path, 'w', encoding='utf-8') as f:
             json.dump(template, f, indent=2)
-        
+
         return template_path
-    
+
     def load_template(self, template_name: str) -> Optional[Dict]:
         """Load a template by name."""
         filename = f"{template_name.lower().replace(' ', '_')}.json"
         template_path = os.path.join(self.templates_dir, filename)
-        
+
+        # Search in both app templates and package templates directories
         if not os.path.exists(template_path):
-            return None
-        
+            # Check in the templates directory within the package
+            package_templates_dir = os.path.join(
+                os.path.dirname(__file__), "templates")
+            package_path = os.path.join(package_templates_dir, filename)
+
+            if os.path.exists(package_path):
+                template_path = package_path
+            else:
+                print(f"❌ Template '{template_name}' not found.")
+                return None
+
         try:
             with open(template_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return None
-    
+
     def get_template(self, template_name: str) -> Optional[Dict[str, Any]]:
         """Get a template by name from built-in or saved templates."""
         # Check built-in templates first
         if template_name in self.templates:
             return self.templates[template_name]
-        
+
         # Then check saved templates
         return self.load_template(template_name)
-    
+
     def get_template_names(self) -> List[str]:
         """Get a list of all template names."""
         template_names = list(self.templates.keys())
-        
+
         # Add saved templates
         for filename in os.listdir(self.templates_dir):
             if filename.endswith('.json'):
                 template_name = filename[:-5].replace('_', ' ')
                 template_names.append(template_name)
-        
+
         return sorted(template_names)
-    
+
     def add_template(self, name: str, template_data: Dict[str, Any]) -> None:
         """Add a template to the built-in templates."""
         self.templates[name] = template_data
 
-    def apply_template(self, db_manager, template_name: str) -> bool:
-        """Apply a template to a database."""
-        template = self.get_template(template_name)
-        if not template:
-            print(f"❌ Template '{template_name}' not found.")
-            return False
-        
+    def apply_template(self, db_manager, template_name_or_data) -> bool:
+        """Apply a template to a database.
+
+        Args:
+            db_manager: DatabaseManager instance
+            template_name_or_data: Either a template name (string) or the actual template data (dict)
+
+        Returns:
+            bool: True if template was applied successfully, False otherwise
+        """
+        if isinstance(template_name_or_data, dict):
+            # Template data was passed directly
+            template = template_name_or_data
+        else:
+            # Template name was passed
+            template_name = template_name_or_data
+            template = self.get_template(template_name)
+            if not template:
+                print(f"❌ Template '{template_name}' not found.")
+                return False
+
+        # Handle different template formats
+        # Format 1: {"table_name": {"columns": {...}}} (original format)
+        # Format 2: {"tables": [{"name": "...", "columns": [...]}]} (new format)
+        # Format 3: {"tables": {"table_name": {"columns": {...}}}} (nested format)
+
+        if "tables" in template:
+            if isinstance(template["tables"], list):
+                # Format 2: List of table objects
+                for table in template["tables"]:
+                    table_name = table["name"]
+                    columns = table["columns"]  # Already a list of column definitions
+                    indexes = table.get("indexes", [])
+
+                    # Create the table
+                    db_manager.create_table(table_name, columns)
+
+                    # Create any indexes
+                    for index_sql in indexes:
+                        db_manager.execute_query(index_sql)
+
+            elif isinstance(template["tables"], dict):
+                # Format 3: Dict of tables
+                for table_name, table_def in template["tables"].items():
+                    columns = table_def['columns']
+                    constraints = table_def.get('constraints', [])
+
+                    # Create the table
+                    db_manager.create_table(table_name, columns, constraints)
+
+            # Optional: Insert sample data if provided
+            if "sample_data" in template:
+                for table_name, rows in template["sample_data"].items():
+                    for row in rows:
+                        columns = ", ".join(row.keys())
+                        placeholders = ", ".join(["?"] * len(row))
+                        values = tuple(row.values())
+
+                        query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+                        db_manager.execute_query(query, values)
+
+            return True
+
+        # Original format (dictionary of tables)
         for table_name, table_def in template.items():
+            # Skip metadata fields
+            if table_name in ("name", "description", "version"):
+                continue
+
             columns = table_def['columns']
             constraints = table_def.get('constraints', [])
-            
+
             # Format columns for create_table
-            column_defs = [f"{name} {dtype}" for name, dtype in columns.items()]
-            
-            # Add any additional constraints
+            if isinstance(columns, dict):
+                column_defs = [f"{name} {dtype}" for name, dtype in columns.items()]
+            else:
+                column_defs = columns  # Assume it's already a list of column definitions
             if constraints:
                 column_defs.extend(constraints)
-            
+
             # Create the table
             db_manager.create_table(table_name, column_defs)
-        
-        return True
 
+        return True
 
 def get_default_templates() -> Dict:
     """Return dictionary of default templates."""
@@ -228,7 +298,7 @@ def get_default_templates() -> Dict:
             ]
         }
     }
-    
+
     # Task Manager Template
     task_manager = {
         "users": {
@@ -285,7 +355,7 @@ def get_default_templates() -> Dict:
             ]
         }
     }
-    
+
     # Blog System Template
     blog_system = {
         "users": {
@@ -354,7 +424,7 @@ def get_default_templates() -> Dict:
             ]
         }
     }
-    
+
     # Return all templates
     return {
         "Web Store": {
@@ -375,15 +445,14 @@ def get_default_templates() -> Dict:
         }
     }
 
-
 def initialize_default_templates():
     """Initialize templates with defaults if empty."""
     templates = DatabaseTemplates()
-    
+
     # If no templates exist, create defaults
     if not os.listdir(TEMPLATES_DIR):
         default_templates = get_default_templates()
-        
+
         for name, template_data in default_templates.items():
             templates.save_template(
                 name,

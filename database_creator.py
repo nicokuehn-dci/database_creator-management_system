@@ -36,13 +36,13 @@ try:
 except ImportError:
     # If that fails, we'll use the original code
     USING_MODULAR = False
-    
+
     # Constants
     DEFAULT_DB_NAME = "database.db"
     CONFIG_DIR = os.path.join(os.path.expanduser("~"), ".database_creator")
     CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
     TEMPLATES_DIR = os.path.join(CONFIG_DIR, "templates")
-    
+
     # Create configuration directory if it doesn't exist
     os.makedirs(CONFIG_DIR, exist_ok=True)
     os.makedirs(TEMPLATES_DIR, exist_ok=True)
@@ -83,7 +83,7 @@ def hash_password(password: str, salt: Optional[bytes] = None) -> Tuple[str, byt
     """Hash a password for storing."""
     if salt is None:
         salt = secrets.token_bytes(32)
-    
+
     pwdhash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
     return f"{salt.hex()}:{pwdhash.hex()}", salt
 
@@ -99,12 +99,12 @@ class DatabaseConnection:
     def __init__(self, db_path):
         self.db_path = db_path
         self.conn = None
-    
+
     def __enter__(self):
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row  # This allows accessing columns by name
         return self.conn
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.conn:
             if exc_type is None:
@@ -119,13 +119,13 @@ class DatabaseManager:
         """Initialize the database manager with a path to the SQLite file."""
         self.db_path = db_path
         self.config = load_config()
-        
+
         # Add to recent databases
         if db_path not in self.config["recent_databases"]:
             self.config["recent_databases"].insert(0, db_path)
             self.config["recent_databases"] = self.config["recent_databases"][:self.config["max_recent"]]
             save_config(self.config)
-    
+
     def execute_script(self, sql_script: str) -> bool:
         """Execute a SQL script with multiple statements."""
         try:
@@ -136,29 +136,29 @@ class DatabaseManager:
         except sqlite3.Error as e:
             print(f"❌ Database error: {e}")
             return False
-    
+
     def execute_query(self, query: str, parameters: tuple = ()) -> List[Dict]:
         """Execute a SQL query and return results as a list of dictionaries."""
         try:
             with DatabaseConnection(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(query, parameters)
-                
+
                 # For SELECT queries
                 if query.strip().upper().startswith("SELECT"):
                     return [dict(row) for row in cursor.fetchall()]
-                
+
                 # For other queries (INSERT, UPDATE, DELETE)
                 return [{"rowcount": cursor.rowcount}]
         except sqlite3.Error as e:
             print(f"❌ Database error: {e}")
             return []
-    
-    def create_table(self, table_name: str, columns: Dict[str, str], 
+
+    def create_table(self, table_name: str, columns: Dict[str, str],
                      constraints: List[str] = None) -> bool:
         """
         Create a table with the given name and columns.
-        
+
         Args:
             table_name: Name of the table
             columns: Dictionary mapping column names to their types and constraints
@@ -168,16 +168,16 @@ class DatabaseManager:
             column_defs = []
             for col_name, col_def in columns.items():
                 column_defs.append(f"{col_name} {col_def}")
-            
+
             if constraints:
                 column_defs.extend(constraints)
-            
+
             create_stmt = f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
                 {', '.join(column_defs)}
             );
             """
-            
+
             with DatabaseConnection(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(create_stmt)
@@ -185,23 +185,23 @@ class DatabaseManager:
         except sqlite3.Error as e:
             print(f"❌ Could not create table {table_name}: {e}")
             return False
-    
+
     def table_exists(self, table_name: str) -> bool:
         """Check if a table exists in the database."""
         query = """
-        SELECT name FROM sqlite_master 
+        SELECT name FROM sqlite_master
         WHERE type='table' AND name=?;
         """
         result = self.execute_query(query, (table_name,))
         return len(result) > 0
-    
+
     def get_table_info(self, table_name: str) -> List[Dict]:
         """Get information about a table's columns."""
         if not self.table_exists(table_name):
             return []
-        
+
         return self.execute_query(f"PRAGMA table_info({table_name});")
-    
+
     def export_database(self, format_type: str, output_path: str) -> bool:
         """Export the database to the specified format."""
         try:
@@ -217,7 +217,7 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ Export error: {e}")
             return False
-    
+
     def _export_to_sql(self, output_path: str) -> bool:
         """Export database to SQL statements."""
         try:
@@ -229,7 +229,7 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ SQL export error: {e}")
             return False
-    
+
     def _export_to_json(self, output_path: str) -> bool:
         """Export database tables to JSON."""
         try:
@@ -237,77 +237,77 @@ class DatabaseManager:
             tables = self.execute_query(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
             )
-            
+
             data = {}
             for table in tables:
                 table_name = table['name']
                 rows = self.execute_query(f"SELECT * FROM {table_name};")
                 data[table_name] = rows
-            
+
             with open(output_path, 'w') as f:
                 json.dump(data, f, indent=2, default=str)
             return True
         except Exception as e:
             print(f"❌ JSON export error: {e}")
             return False
-    
+
     def _export_to_csv_dir(self, output_dir: str) -> bool:
         """Export each table to a separate CSV file in the given directory."""
         try:
             import csv
             os.makedirs(output_dir, exist_ok=True)
-            
+
             # Get all table names
             tables = self.execute_query(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
             )
-            
+
             for table in tables:
                 table_name = table['name']
                 rows = self.execute_query(f"SELECT * FROM {table_name};")
-                
+
                 if not rows:
                     continue
-                    
+
                 output_file = os.path.join(output_dir, f"{table_name}.csv")
                 with open(output_file, 'w', newline='') as f:
                     writer = csv.DictWriter(f, fieldnames=rows[0].keys())
                     writer.writeheader()
                     writer.writerows(rows)
-            
+
             return True
         except Exception as e:
             print(f"❌ CSV export error: {e}")
             return False
-    
+
     def import_from_sql(self, sql_file: str) -> bool:
         """Import database from SQL file."""
         try:
             with open(sql_file, 'r') as f:
                 sql_script = f.read()
-            
+
             return self.execute_script(sql_script)
         except Exception as e:
             print(f"❌ Import error: {e}")
             return False
-    
+
     def import_from_json(self, json_file: str) -> bool:
         """Import database from JSON file."""
         try:
             with open(json_file, 'r') as f:
                 data = json.load(f)
-            
+
             with DatabaseConnection(self.db_path) as conn:
                 cursor = conn.cursor()
-                
+
                 for table_name, rows in data.items():
                     if not rows:
                         continue
-                    
+
                     # Create table with columns from the first row
                     columns = list(rows[0].keys())
                     placeholders = ', '.join(['?'] * len(columns))
-                    
+
                     # Create table
                     col_defs = [f"{col} TEXT" for col in columns]
                     create_stmt = f"""
@@ -316,14 +316,14 @@ class DatabaseManager:
                     );
                     """
                     cursor.execute(create_stmt)
-                    
+
                     # Insert data
                     insert_stmt = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ({placeholders});"
-                    
+
                     for row in rows:
                         values = [row[col] for col in columns]
                         cursor.execute(insert_stmt, values)
-            
+
             return True
         except Exception as e:
             print(f"❌ JSON import error: {e}")
@@ -334,7 +334,7 @@ class DatabaseTemplates:
     def __init__(self, templates_dir=TEMPLATES_DIR):
         self.templates_dir = templates_dir
         os.makedirs(templates_dir, exist_ok=True)
-        
+
     def list_templates(self):
         """List all available templates."""
         templates = []
@@ -348,7 +348,7 @@ class DatabaseTemplates:
                 except json.JSONDecodeError:
                     pass  # Skip invalid templates
         return templates
-    
+
     def save_template(self, name, description, tables):
         """Save a database template."""
         template = {
@@ -357,25 +357,25 @@ class DatabaseTemplates:
             "created": datetime.datetime.now().isoformat(),
             "tables": tables
         }
-        
+
         # Create a valid filename from template name
         filename = re.sub(r'[^\w\s-]', '', name.lower())
         filename = re.sub(r'[-\s]+', '_', filename)
         template_path = os.path.join(self.templates_dir, f"{filename}.json")
-        
+
         with open(template_path, 'w') as f:
             json.dump(template, f, indent=2)
-        
+
         return template_path
-    
+
     def load_template(self, template_name):
         """Load a template by name."""
         filename = f"{template_name.lower().replace(' ', '_')}.json"
         template_path = os.path.join(self.templates_dir, filename)
-        
+
         if not os.path.exists(template_path):
             return None
-        
+
         try:
             with open(template_path, 'r') as f:
                 return json.load(f)
@@ -388,18 +388,18 @@ class DatabaseTemplates:
         if not template:
             print(f"❌ Template '{template_name}' not found.")
             return False
-        
+
         for table_name, table_def in template['tables'].items():
             columns = table_def['columns']
             constraints = table_def.get('constraints', [])
             db_manager.create_table(table_name, columns, constraints)
-        
+
         return True
 
 # Initialize templates with defaults if empty
 def initialize_default_templates():
     templates = DatabaseTemplates()
-    
+
     # If no templates exist, create defaults
     if not os.listdir(TEMPLATES_DIR):
         # Web Store Template
@@ -453,11 +453,11 @@ def initialize_default_templates():
             }
         }
         templates.save_template(
-            "Web Store", 
+            "Web Store",
             "A complete e-commerce database with customers, products, orders, and line items",
             web_store
         )
-        
+
         # Music Library Template
         music_library = {
             "artists": {
@@ -517,11 +517,11 @@ def initialize_default_templates():
             }
         }
         templates.save_template(
-            "Music Library", 
+            "Music Library",
             "A music collection database with artists, albums, songs, and playlists",
             music_library
         )
-        
+
         # Task Manager Template
         task_manager = {
             "users": {
@@ -579,11 +579,11 @@ def initialize_default_templates():
             }
         }
         templates.save_template(
-            "Task Manager", 
+            "Task Manager",
             "A project management database with users, projects, tasks, and comments",
             task_manager
         )
-        
+
         # Blog System Template
         blog_system = {
             "users": {
@@ -653,11 +653,11 @@ def initialize_default_templates():
             }
         }
         templates.save_template(
-            "Blog System", 
+            "Blog System",
             "A blogging database with users, posts, comments, categories, and tags",
             blog_system
         )
-        
+
         # Advanced E-Commerce Template
         advanced_ecommerce = {
             "customers": {
@@ -894,7 +894,7 @@ def initialize_default_templates():
             }
         }
         templates.save_template(
-            "Advanced E-Commerce", 
+            "Advanced E-Commerce",
             "A comprehensive e-commerce database with customers, products, inventory, orders, payments, and more",
             advanced_ecommerce
         )
@@ -909,7 +909,7 @@ class Validator:
         """Validate an email address format."""
         pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         return bool(re.match(pattern, email))
-    
+
     @staticmethod
     def validate_password(password: str, min_length: int = 8) -> Tuple[bool, str]:
         """
@@ -918,21 +918,21 @@ class Validator:
         """
         if len(password) < min_length:
             return False, f"Password must be at least {min_length} characters long"
-        
+
         checks = [
             (re.search(r'[A-Z]', password), "at least one uppercase letter"),
             (re.search(r'[a-z]', password), "at least one lowercase letter"),
             (re.search(r'[0-9]', password), "at least one number"),
             (re.search(r'[^A-Za-z0-9]', password), "at least one special character")
         ]
-        
+
         failed_checks = [msg for check, msg in checks if not check]
-        
+
         if failed_checks:
             return False, "Password must contain " + ", ".join(failed_checks)
-        
+
         return True, "Password is strong"
-    
+
     @staticmethod
     def validate_number(value: str, min_val: float = None, max_val: float = None) -> Tuple[bool, Union[int, float, None]]:
         """
@@ -950,13 +950,13 @@ class Validator:
                 num = float(value)
             except ValueError:
                 return False, None
-        
+
         # Check range if specified
         if min_val is not None and num < min_val:
             return False, None
         if max_val is not None and num > max_val:
             return False, None
-            
+
         return True, num
 
 # Database schema setup functions
@@ -964,32 +964,32 @@ def setup_database(db_manager):
     """Set up a database with default schema based on template."""
     templates = DatabaseTemplates()
     template_list = templates.list_templates()
-    
+
     # Ensure templates are initialized
     if not template_list or len(template_list) < 5:  # Check if we have all expected templates
         print("Initializing default templates...")
         initialize_default_templates()
         template_list = templates.list_templates()
-    
+
     # Find the Advanced E-Commerce template and move it to the first position
     advanced_ecommerce_index = None
     for i, template in enumerate(template_list):
         if template['name'] == "Advanced E-Commerce":
             advanced_ecommerce_index = i
             break
-    
+
     if advanced_ecommerce_index is not None:
         # Move to first position for better visibility
         advanced_template = template_list.pop(advanced_ecommerce_index)
         template_list.insert(0, advanced_template)
-    
+
     print("\n=== Available Database Templates ===")
     for i, template in enumerate(template_list):
         print(f"{i+1}. {template['name']} - {template['description']}")
     print("0. Custom database (define your own schema)")
-    
+
     choice = input("\nSelect a template (or 0 for custom): ")
-    
+
     if choice == "0":
         return setup_custom_database(db_manager)
     else:
@@ -998,17 +998,17 @@ def setup_database(db_manager):
             if 0 <= index < len(template_list):
                 template = template_list[index]
                 print(f"\nApplying template: {template['name']}")
-                
+
                 # Create tables from template
                 for table_name, table_def in template['tables'].items():
                     columns = table_def.get('columns', {})
                     constraints = table_def.get('constraints', [])
-                    
+
                     if db_manager.create_table(table_name, columns, constraints):
                         print(f"✅ Created table: {table_name}")
                     else:
                         print(f"❌ Failed to create table: {table_name}")
-                
+
                 return True
             else:
                 print("❌ Invalid choice. Please try again.")
@@ -1021,43 +1021,43 @@ def setup_custom_database(db_manager):
     """Set up a custom database schema interactively."""
     print("\n=== Custom Database Setup ===")
     print("You'll now define the tables for your database.")
-    
+
     tables_created = 0
-    
+
     while True:
         table_name = input("\nEnter table name (or press Enter to finish): ")
         if not table_name:
             break
-        
+
         columns = {}
         constraints = []
-        
+
         print(f"\nDefining columns for table '{table_name}':")
         print("For each column, provide name and definition (e.g., TEXT NOT NULL)")
-        
+
         while True:
             col_name = input("\nColumn name (or press Enter to finish columns): ")
             if not col_name:
                 break
-            
+
             col_def = input(f"Definition for '{col_name}' (e.g., INTEGER PRIMARY KEY): ")
             columns[col_name] = col_def
-        
+
         print("\nAdd table constraints (e.g., FOREIGN KEY, UNIQUE):")
         print("Enter constraints one by one, or press Enter to skip")
-        
+
         while True:
             constraint = input("Constraint (or press Enter to finish): ")
             if not constraint:
                 break
             constraints.append(constraint)
-        
+
         if db_manager.create_table(table_name, columns, constraints):
             print(f"✅ Table '{table_name}' created successfully.")
             tables_created += 1
         else:
             print(f"❌ Failed to create table '{table_name}'.")
-    
+
     if tables_created > 0:
         print(f"\n✅ Database setup complete. Created {tables_created} tables.")
         return True
@@ -1068,58 +1068,58 @@ def setup_custom_database(db_manager):
 def add_customer(db_manager):
     """Add a customer to the database with secure password handling."""
     print("\n=== Add Customer ===")
-    
+
     if not db_manager.table_exists("customers"):
         print("❌ Customers table does not exist. Please set up the database first.")
         print("Please select option 1 from the main menu and choose either")
         print("'Web Store' or 'Advanced E-Commerce' template which includes customer tables.")
         return
-    
+
     first_name = input("First name: ")
     last_name = input("Last name: ")
     email = input("Email: ")
-    
+
     # Validate email
     if not Validator.validate_email(email):
         print("❌ Invalid email format.")
         return
-    
+
     # Check if email already exists
     existing = db_manager.execute_query(
-        "SELECT customer_id FROM customers WHERE email = ?", 
+        "SELECT customer_id FROM customers WHERE email = ?",
         (email,)
     )
     if existing:
         print("❌ A customer with this email already exists.")
         return
-    
+
     password = input("Password: ")
-    
+
     # Validate password
     config = load_config()
     is_valid, message = Validator.validate_password(password, config.get("password_min_length", 8))
-    
+
     if not is_valid:
         print(f"❌ {message}")
         return
-    
+
     # Hash password
     password_hash, _ = hash_password(password)
-    
+
     # Check if the customers table has password_hash column or password column
     table_info = db_manager.get_table_info("customers")
     columns = [col['name'] for col in table_info]
-    
+
     # Determine the correct password column name
     if "password_hash" in columns:
         password_column = "password_hash"
     else:
         password_column = "password"
-    
+
     # Build the query dynamically
     columns = ["first_name", "last_name", "email", password_column]
     values = [first_name, last_name, email, password_hash]
-    
+
     # Add optional phone if the column exists
     phone = None
     if "phone" in columns:
@@ -1127,15 +1127,15 @@ def add_customer(db_manager):
         if phone:
             columns.append("phone")
             values.append(phone)
-    
+
     # Insert into database
     placeholders = ", ".join(["?"] * len(values))
     column_names = ", ".join(columns)
-    
+
     query = f"INSERT INTO customers ({column_names}) VALUES ({placeholders})"
-    
+
     result = db_manager.execute_query(query, tuple(values))
-    
+
     if result:
         print("✅ Customer added successfully.")
         print(f"Customer ID: {result[0]['last_insert_rowid()'] if 'last_insert_rowid()' in result[0] else 'Unknown'}")
@@ -1145,26 +1145,26 @@ def add_customer(db_manager):
 def add_product(db_manager):
     """Add a product to the database with validation."""
     print("\n=== Add Product ===")
-    
+
     if not db_manager.table_exists("products"):
         print("❌ Products table does not exist. Please set up the database first.")
         print("Please select option 1 from the main menu and choose either")
         print("'Web Store' or 'Advanced E-Commerce' template which includes product tables.")
         return
-    
+
     # Get table structure to determine available columns
     table_info = db_manager.get_table_info("products")
     available_columns = [col['name'] for col in table_info]
-    
+
     # Initialize columns and values lists
     columns = []
     values = []
-    
+
     # Required fields
     name = input("Product name: ")
     columns.append("name")
     values.append(name)
-    
+
     # Get and validate price
     price_str = input("Price: ")
     is_valid, price = Validator.validate_number(price_str, min_val=0)
@@ -1173,7 +1173,7 @@ def add_product(db_manager):
         return
     columns.append("price")
     values.append(price)
-    
+
     # Get and validate stock
     stock_str = input("Stock: ")
     is_valid, stock = Validator.validate_number(stock_str, min_val=0)
@@ -1183,20 +1183,20 @@ def add_product(db_manager):
     stock = int(stock)
     columns.append("stock")
     values.append(stock)
-    
+
     # Description is optional
     description = input("Description (optional): ")
     if description:
         columns.append("description")
         values.append(description)
-    
+
     # Check for SKU in advanced schema
     if "sku" in available_columns:
         sku = input("SKU (optional): ")
         if sku:
             columns.append("sku")
             values.append(sku)
-    
+
     # Check for category in advanced schema
     if "category_id" in available_columns:
         # List categories if they exist
@@ -1204,28 +1204,28 @@ def add_product(db_manager):
             categories = db_manager.execute_query(
                 "SELECT category_id, name FROM categories ORDER BY category_id"
             )
-            
+
             if categories:
                 print("\n--- Available Categories ---")
                 for cat in categories:
                     print(f"[{cat['category_id']}] {cat['name']}")
                 print("---------------------------")
-                
+
                 cat_id_str = input("\nCategory ID (or press Enter to skip): ")
                 if cat_id_str:
                     is_valid, cat_id = Validator.validate_number(cat_id_str, min_val=1)
                     if is_valid:
                         columns.append("category_id")
                         values.append(cat_id)
-    
+
     # Build and execute query
     query = f"""
-    INSERT INTO products ({', '.join(columns)}) 
+    INSERT INTO products ({', '.join(columns)})
     VALUES ({', '.join(['?'] * len(values))})
     """
-    
+
     result = db_manager.execute_query(query, tuple(values))
-    
+
     if result:
         print("✅ Product added successfully.")
         print(f"Product ID: {result[0]['last_insert_rowid()'] if 'last_insert_rowid()' in result[0] else 'Unknown'}")
@@ -1235,11 +1235,11 @@ def add_product(db_manager):
 def list_products(db_manager):
     """List all products in the database."""
     print("\n=== Products List ===")
-    
+
     if not db_manager.table_exists("products"):
         print("❌ Products table does not exist. Please set up the database first.")
         return
-    
+
     products = db_manager.execute_query(
         """
         SELECT product_id, name, price, stock, description
@@ -1247,14 +1247,14 @@ def list_products(db_manager):
         ORDER BY product_id
         """
     )
-    
+
     if not products:
         print("No products found.")
         return
-    
+
     print(f"\n{'ID':<5} {'Name':<20} {'Price':<10} {'Stock':<10} {'Description'}")
     print("-" * 70)
-    
+
     for product in products:
         desc = product.get('description', '')
         if desc and len(desc) > 30:
@@ -1264,48 +1264,48 @@ def list_products(db_manager):
 def place_order(db_manager):
     """Place an order with validation and transaction support."""
     print("\n=== Place Order ===")
-    
+
     if not db_manager.table_exists("orders") or not db_manager.table_exists("products"):
         print("❌ Required tables do not exist. Please set up the database first.")
         return
-    
+
     # Get and validate customer ID
     customer_id_str = input("Customer ID: ")
     is_valid, customer_id = Validator.validate_number(customer_id_str, min_val=1)
     if not is_valid:
         print("❌ Invalid customer ID.")
         return
-    
+
     # Check if customer exists
     customer = db_manager.execute_query(
-        "SELECT customer_id FROM customers WHERE customer_id = ?", 
+        "SELECT customer_id FROM customers WHERE customer_id = ?",
         (customer_id,)
     )
     if not customer:
         print("❌ Customer not found.")
         return
-    
+
     # List products for selection
     list_products(db_manager)
-    
+
     # Get and validate product ID
     product_id_str = input("\nProduct ID: ")
     is_valid, product_id = Validator.validate_number(product_id_str, min_val=1)
     if not is_valid:
         print("❌ Invalid product ID.")
         return
-    
+
     # Check product and stock
     product = db_manager.execute_query(
-        "SELECT product_id, name, price, stock FROM products WHERE product_id = ?", 
+        "SELECT product_id, name, price, stock FROM products WHERE product_id = ?",
         (product_id,)
     )
     if not product:
         print("❌ Product not found.")
         return
-    
+
     product = product[0]
-    
+
     # Get and validate quantity
     quantity_str = input("Quantity: ")
     is_valid, quantity = Validator.validate_number(quantity_str, min_val=1)
@@ -1313,66 +1313,66 @@ def place_order(db_manager):
         print("❌ Invalid quantity. Must be a positive integer.")
         return
     quantity = int(quantity)
-    
+
     # Check if enough stock
     if product['stock'] < quantity:
         print("❌ Not enough stock available.")
         return
-    
+
     # Calculate total amount
     total_amount = product['price'] * quantity
-    
+
     # Start a transaction to ensure consistency
     try:
         with DatabaseConnection(db_manager.db_path) as conn:
             cursor = conn.cursor()
-            
+
             # Insert order
             cursor.execute(
                 """
-                INSERT INTO orders (customer_id, total_amount) 
+                INSERT INTO orders (customer_id, total_amount)
                 VALUES (?, ?)
-                """, 
+                """,
                 (customer_id, total_amount)
             )
-            
+
             order_id = cursor.lastrowid
-            
+
             # Insert order item
             cursor.execute(
                 """
-                INSERT INTO order_items (order_id, product_id, quantity, price) 
+                INSERT INTO order_items (order_id, product_id, quantity, price)
                 VALUES (?, ?, ?, ?)
-                """, 
+                """,
                 (order_id, product_id, quantity, product['price'])
             )
-            
+
             # Update stock
             cursor.execute(
                 """
                 UPDATE products SET stock = stock - ? WHERE product_id = ?
-                """, 
+                """,
                 (quantity, product_id)
             )
-        
+
         print(f"✅ Order #{order_id} placed successfully.")
         print(f"Total amount: ${total_amount:.2f}")
-        
+
     except sqlite3.Error as e:
         print(f"❌ Error placing order: {e}")
 
 def list_orders(db_manager):
     """List all orders with details."""
     print("\n=== Orders List ===")
-    
+
     if not db_manager.table_exists("orders"):
         print("❌ Orders table does not exist. Please set up the database first.")
         return
-    
+
     # Check if we have the old schema or the new schema
     table_info = db_manager.get_table_info("orders")
     column_names = [col['name'] for col in table_info]
-    
+
     if 'product_id' in column_names:
         # Old schema with direct product reference
         orders = db_manager.execute_query(
@@ -1386,14 +1386,14 @@ def list_orders(db_manager):
             ORDER BY o.order_date DESC
             """
         )
-        
+
         if not orders:
             print("No orders found.")
             return
-        
+
         print(f"\n{'ID':<5} {'Customer':<20} {'Product':<20} {'Quantity':<10} {'Date':<20} {'Total'}")
         print("-" * 90)
-        
+
         for order in orders:
             print(f"{order['order_id']:<5} {order['customer_name']:<20} {order['product_name']:<20} "
                   f"{order['quantity']:<10} {order['order_date']:<20} ${order['total']:.2f}")
@@ -1409,18 +1409,18 @@ def list_orders(db_manager):
                 ORDER BY o.order_date DESC
                 """
             )
-            
+
             if not orders:
                 print("No orders found.")
                 return
-            
+
             print(f"\n{'ID':<5} {'Customer':<20} {'Date':<20} {'Status':<10} {'Total'}")
             print("-" * 70)
-            
+
             for order in orders:
                 print(f"{order['order_id']:<5} {order['customer_name']:<20} {order['order_date']:<20} "
                       f"{order['status']:<10} ${order['total_amount']:.2f}")
-                
+
                 # Get order items
                 items = db_manager.execute_query(
                     """
@@ -1431,7 +1431,7 @@ def list_orders(db_manager):
                     """,
                     (order['order_id'],)
                 )
-                
+
                 if items:
                     print(f"   Items:")
                     for item in items:
@@ -1444,14 +1444,14 @@ def list_orders(db_manager):
 def export_database(db_manager):
     """Export database to various formats."""
     print("\n=== Export Database ===")
-    
+
     config = load_config()
     formats = config.get("export_formats", ["sql", "csv", "json"])
-    
+
     print("Available export formats:")
     for i, format_type in enumerate(formats):
         print(f"{i+1}. {format_type.upper()}")
-    
+
     try:
         choice = int(input("\nSelect format: "))
         if choice < 1 or choice > len(formats):
@@ -1460,9 +1460,9 @@ def export_database(db_manager):
     except ValueError:
         print("❌ Invalid input. Please enter a number.")
         return
-    
+
     format_type = formats[choice-1]
-    
+
     # Get output path
     if format_type == 'csv':
         default_path = f"{os.path.splitext(db_manager.db_path)[0]}_export"
@@ -1470,7 +1470,7 @@ def export_database(db_manager):
     else:
         default_path = f"{os.path.splitext(db_manager.db_path)[0]}.{format_type}"
         output_path = input(f"Output file path [{default_path}]: ") or default_path
-    
+
     print(f"\nExporting to {format_type.upper()}...")
     if db_manager.export_database(format_type, output_path):
         print(f"✅ Database exported successfully to {output_path}")
@@ -1481,16 +1481,16 @@ def import_database(db_manager):
     """Import database from SQL or JSON file."""
     print("\n=== Import Database ===")
     print("Warning: This will overwrite existing tables!")
-    
+
     confirm = input("Do you want to continue? (y/n): ")
     if confirm.lower() != 'y':
         print("Import cancelled.")
         return
-    
+
     print("\nAvailable import formats:")
     print("1. SQL")
     print("2. JSON")
-    
+
     try:
         choice = int(input("\nSelect format: "))
         if choice < 1 or choice > 2:
@@ -1499,21 +1499,21 @@ def import_database(db_manager):
     except ValueError:
         print("❌ Invalid input. Please enter a number.")
         return
-    
+
     # Get input file
     file_path = input("Input file path: ")
     if not os.path.exists(file_path):
         print("❌ File not found.")
         return
-    
+
     print("\nImporting data...")
     success = False
-    
+
     if choice == 1:  # SQL
         success = db_manager.import_from_sql(file_path)
     else:  # JSON
         success = db_manager.import_from_json(file_path)
-    
+
     if success:
         print("✅ Database imported successfully.")
     else:
@@ -1522,31 +1522,31 @@ def import_database(db_manager):
 def save_current_as_template(db_manager):
     """Save the current database schema as a template."""
     print("\n=== Save as Template ===")
-    
+
     name = input("Template name: ")
     if not name:
         print("❌ Template name is required.")
         return
-    
+
     description = input("Description: ")
-    
+
     # Get all tables
     tables = db_manager.execute_query(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';"
     )
-    
+
     if not tables:
         print("❌ No tables found in the database.")
         return
-    
+
     template_tables = {}
-    
+
     for table in tables:
         table_name = table['name']
-        
+
         # Get columns
         columns_info = db_manager.get_table_info(table_name)
-        
+
         # Format columns
         columns = {}
         for col in columns_info:
@@ -1557,9 +1557,9 @@ def save_current_as_template(db_manager):
                 col_def += " PRIMARY KEY"
             if col['dflt_value'] is not None:
                 col_def += f" DEFAULT {col['dflt_value']}"
-                
+
             columns[col['name']] = col_def
-        
+
         # Get constraints (simplified - just foreign keys for now)
         constraints = []
         try:
@@ -1569,38 +1569,38 @@ def save_current_as_template(db_manager):
                 constraints.append(constraint)
         except:
             pass
-        
+
         template_tables[table_name] = {
             "columns": columns,
             "constraints": constraints
         }
-    
+
     # Save template
     templates = DatabaseTemplates()
     template_path = templates.save_template(name, description, template_tables)
-    
+
     print(f"✅ Template saved: {template_path}")
 
 def menu(db_path=None):
     """Main menu for the database creator application."""
-    
+
     if db_path is None:
         # Get recent databases
         config = load_config()
         recent_dbs = config.get("recent_databases", [])
-        
+
         print("\n=== Database Creator ===")
         print("Welcome! This tool helps you create and manage SQLite databases.\n")
-        
+
         # Show recent databases
         if recent_dbs:
             print("Recent databases:")
             for i, path in enumerate(recent_dbs):
                 print(f"{i+1}. {path}")
             print("0. Create a new database")
-            
+
             choice = input("\nSelect a database or 0 for new: ")
-            
+
             if choice != "0":
                 try:
                     index = int(choice) - 1
@@ -1610,15 +1610,15 @@ def menu(db_path=None):
                         print("❌ Invalid choice.")
                 except ValueError:
                     print("❌ Invalid input.")
-        
+
         # Get path for new database
         if db_path is None:
             default_path = os.path.join(config.get("default_path", os.getcwd()), DEFAULT_DB_NAME)
             db_path = input(f"Enter database path [{default_path}]: ") or default_path
-    
+
     # Create database manager
     db_manager = DatabaseManager(db_path)
-    
+
     # Main menu loop
     while True:
         print(f"\n=== Database Creator Menu (DB: {db_manager.db_path}) ===")
@@ -1632,9 +1632,9 @@ def menu(db_path=None):
         print("8. Import database")
         print("9. Save current schema as template")
         print("0. Exit")
-        
+
         choice = input("\nChoose an option: ")
-        
+
         if choice == "1":
             setup_database(db_manager)
         elif choice == "2":
@@ -1667,19 +1667,19 @@ def parse_args():
     parser.add_argument("--export", help="Export database to specified format (sql, json, csv)")
     parser.add_argument("--output", help="Output path for export")
     parser.add_argument("--gui", action="store_true", help="Launch in GUI mode (if available)")
-    
+
     return parser.parse_args()
 
 def command_line_interface():
     """Entry point for the command line interface."""
     args = parse_args()
-    
+
     # Handle database path
     db_path = args.database
-    
+
     # Create DatabaseManager
     db_manager = DatabaseManager(db_path) if db_path else None
-    
+
     # Process command-line specific functions
     if args.template and db_manager:
         templates = DatabaseTemplates()
@@ -1715,7 +1715,7 @@ def launch_gui(db_path=None):
     try:
         import tkinter as tk
         from tkinter import ttk, filedialog, messagebox
-        
+
         class DatabaseCreatorGUI:
             def __init__(self, root, db_path=None):
                 self.root = root
@@ -1723,63 +1723,63 @@ def launch_gui(db_path=None):
                 self.root.geometry("800x600")
                 self.db_path = db_path
                 self.db_manager = None
-                
+
                 # Set up the main frame
                 self.main_frame = ttk.Frame(root, padding="10")
                 self.main_frame.pack(fill=tk.BOTH, expand=True)
-                
+
                 # Database selection
                 self.setup_database_selector()
-                
+
                 # Content area
                 self.content_frame = ttk.Frame(self.main_frame)
                 self.content_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-                
+
                 # Status bar
                 self.status_var = tk.StringVar()
                 self.status_bar = ttk.Label(root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
                 self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-                
+
                 # Show welcome screen
                 self.show_welcome()
-                
+
                 # Connect to database if path provided
                 if db_path:
                     self.connect_database(db_path)
-            
+
             def setup_database_selector(self):
                 """Set up the database selection area."""
                 frame = ttk.LabelFrame(self.main_frame, text="Database")
                 frame.pack(fill=tk.X, pady=5)
-                
+
                 self.db_path_var = tk.StringVar()
                 if self.db_path:
                     self.db_path_var.set(self.db_path)
-                
+
                 ttk.Label(frame, text="Database File:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
                 self.path_entry = ttk.Entry(frame, textvariable=self.db_path_var, width=50)
                 self.path_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W+tk.E)
-                
+
                 ttk.Button(frame, text="Browse...", command=self.browse_database).grid(row=0, column=2, padx=5, pady=5)
                 ttk.Button(frame, text="Connect", command=self.connect_to_entered_path).grid(row=0, column=3, padx=5, pady=5)
-                
+
                 frame.columnconfigure(1, weight=1)
-            
+
             def browse_database(self):
                 """Open file browser to select database."""
                 config = load_config()
                 initial_dir = config.get("default_path", os.getcwd())
-                
+
                 file_path = filedialog.asksaveasfilename(
                     initialdir=initial_dir,
                     title="Select Database File",
                     filetypes=(("SQLite Databases", "*.db"), ("All Files", "*.*")),
                     defaultextension=".db"
                 )
-                
+
                 if file_path:
                     self.db_path_var.set(file_path)
-            
+
             def connect_to_entered_path(self):
                 """Connect to the database specified in the entry field."""
                 path = self.db_path_var.get().strip()
@@ -1787,7 +1787,7 @@ def launch_gui(db_path=None):
                     self.connect_database(path)
                 else:
                     messagebox.showerror("Error", "Please specify a database file path")
-            
+
             def connect_database(self, path):
                 """Connect to the specified database."""
                 try:
@@ -1797,56 +1797,56 @@ def launch_gui(db_path=None):
                     self.status_var.set(f"Connected to {path}")
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to connect to database: {e}")
-            
+
             def show_welcome(self):
                 """Show the welcome screen."""
                 # Clear content frame
                 for widget in self.content_frame.winfo_children():
                     widget.destroy()
-                
+
                 ttk.Label(
-                    self.content_frame, 
+                    self.content_frame,
                     text="Welcome to Database Creator!",
                     font=("Arial", 16)
                 ).pack(pady=20)
-                
+
                 ttk.Label(
                     self.content_frame,
                     text="Select or create a database to get started.",
                     font=("Arial", 12)
                 ).pack(pady=10)
-                
+
                 # Recent databases
                 config = load_config()
                 recent_dbs = config.get("recent_databases", [])
-                
+
                 if recent_dbs:
                     ttk.Label(
                         self.content_frame,
                         text="Recent Databases:",
                         font=("Arial", 12, "bold")
                     ).pack(pady=(20, 5), anchor=tk.W)
-                    
+
                     for db_path in recent_dbs:
                         frame = ttk.Frame(self.content_frame)
                         frame.pack(fill=tk.X, pady=2)
-                        
+
                         ttk.Label(frame, text=db_path).pack(side=tk.LEFT, padx=10)
                         ttk.Button(
-                            frame, text="Open", 
+                            frame, text="Open",
                             command=lambda p=db_path: self.connect_database(p)
                         ).pack(side=tk.RIGHT)
-            
+
             def show_main_menu(self):
                 """Show the main menu after connecting to a database."""
                 # Clear content frame
                 for widget in self.content_frame.winfo_children():
                     widget.destroy()
-                
+
                 # Create a frame for the buttons
                 btn_frame = ttk.Frame(self.content_frame)
                 btn_frame.pack(pady=20)
-                
+
                 # Define menu options
                 options = [
                     ("Set Up Schema", self.setup_schema),
@@ -1857,48 +1857,48 @@ def launch_gui(db_path=None):
                     ("Import Data", self.import_data),
                     ("Manage Templates", self.manage_templates)
                 ]
-                
+
                 # Create buttons
                 for i, (text, command) in enumerate(options):
                     ttk.Button(
                         btn_frame, text=text, command=command, width=20
                     ).grid(row=i//3, column=i%3, padx=10, pady=10)
-            
+
             def setup_schema(self):
                 """Show the schema setup screen."""
                 # This would be expanded to show template selection and schema design UI
                 # For now, just a placeholder
                 messagebox.showinfo("Not Implemented", "Schema setup UI not yet implemented")
-                
+
             def manage_customers(self):
                 """Show the customer management screen."""
                 messagebox.showinfo("Not Implemented", "Customer management UI not yet implemented")
-                
+
             def manage_products(self):
                 """Show the product management screen."""
                 messagebox.showinfo("Not Implemented", "Product management UI not yet implemented")
-                
+
             def manage_orders(self):
                 """Show the order management screen."""
                 messagebox.showinfo("Not Implemented", "Order management UI not yet implemented")
-                
+
             def export_db(self):
                 """Show the export database screen."""
                 messagebox.showinfo("Not Implemented", "Export UI not yet implemented")
-                
+
             def import_data(self):
                 """Show the import data screen."""
                 messagebox.showinfo("Not Implemented", "Import UI not yet implemented")
-                
+
             def manage_templates(self):
                 """Show the template management screen."""
                 messagebox.showinfo("Not Implemented", "Template management UI not yet implemented")
-        
+
         # Create and run the application
         root = tk.Tk()
         app = DatabaseCreatorGUI(root, db_path)
         root.mainloop()
-        
+
     except ImportError:
         raise ImportError("Tkinter is required for GUI mode")
 

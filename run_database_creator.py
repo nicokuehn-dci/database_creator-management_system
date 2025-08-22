@@ -12,11 +12,11 @@ def main():
     """Main entry point that detects which version to run."""
     # Check if this is being run from the package directory with both versions available
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     # Check if we're in a directory with both the package and the original script
     package_init = os.path.join(current_dir, "database_creator", "__init__.py")
     original_script = os.path.join(current_dir, "database_creator.py")
-    
+
     # If we have the modular package structure
     if os.path.exists(package_init):
         try:
