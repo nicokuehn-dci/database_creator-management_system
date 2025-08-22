@@ -206,9 +206,13 @@ You can export your database in several formats:
   python main.py --db mydb.db --export mydb.sql
   ```
 
-- In GUI mode, use "File" → "Export SQL"
+- In GUI mode:
+  - For the entire database: "File" → "Export" → "SQL"
+  - For a specific table: "File" → "Export" → "CSV"
 
 ### Importing Data
+
+#### Importing SQL
 
 To import a previously exported database:
 
@@ -217,7 +221,45 @@ To import a previously exported database:
   python main.py --db new_db.db --import backup.sql
   ```
 
-- In GUI mode, use "File" → "Import SQL"
+- In GUI mode, use "File" → "Import" → "SQL"
+
+#### Importing CSV/Text Files
+
+The application includes a powerful text file import wizard:
+
+1. Connect to a database
+2. Go to "File" → "Import" → "CSV/Text File"
+3. Follow the wizard steps:
+   - **Step 1: Select File**
+     - Choose file type (CSV, TSV, plain text)
+     - Browse for your file
+     - Set table name and encoding
+   
+   - **Step 2: Preview Data**
+     - Choose delimiter character (comma, tab, custom)
+     - Specify if first row contains headers
+     - Preview how the data will be interpreted
+   
+   - **Step 3: Map Columns**
+     - Map file columns to database columns
+     - Set data types (TEXT, INTEGER, etc.)
+     - Add constraints (PRIMARY KEY, NOT NULL, UNIQUE)
+     - Choose which columns to include/exclude
+   
+   - **Step 4: Import**
+     - Choose how to handle existing tables (replace or append)
+     - Set batch size for large imports
+     - Execute the import process with progress tracking
+
+#### Importing Excel Files
+
+To import data from Excel spreadsheets:
+
+1. Connect to a database
+2. Go to "File" → "Import" → "Excel File"
+3. Select your Excel file
+4. Choose which sheet to import
+5. The data will be imported into a new table with the same name as the sheet
 
 ## Security Features
 
